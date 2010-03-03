@@ -3,7 +3,8 @@ Capistrano::Configuration.instance.load do
 
     # Most people use origin here
     unless exists?(:remote)
-      set :remote, 'origin'
+      git_remote = `git config deploy.remote`.strip
+      set :remote,  git_remote.empty? ? 'origin' : git_remote
     end
 
     desc "Mark current commit (HEAD) and push it the central repo"
