@@ -7,12 +7,9 @@ Capistrano::Configuration.instance.load do
       set :remote,  git_remote.empty? ? 'origin' : git_remote
     end
 
-    desc "Mark current commit (HEAD) and push it the central repo"
+    desc "Push HEAD to the central repo"
     task :push do
-      if not `git rev-parse --symbolic-full-name HEAD`.chomp["refs/heads/#{branch}"]
-        system "git branch -f #{branch} HEAD"
-      end
-      system "git push --force #{remote} #{branch}"
+      system "git push --force #{remote} HEAD:#{branch}"
     end
 
     task :sync do
@@ -45,10 +42,7 @@ Capistrano::Configuration.instance.load do
       cap deploy
 
       Under the hood:
-        * If being on a branch diffent that #{branch}:
-          git branch -f #{branch} <desired-commit>
-        * Finally send changes to the central repo:
-          git push --force #{remote}} #{branch} (or cap gity:push)
+        * git push --force #{remote} HEAD:#{branch} (or cap gity:push)
         * cap deploy
 
       Troubleshooting:
