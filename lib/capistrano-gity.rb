@@ -62,7 +62,24 @@ Capistrano::Configuration.instance.load do
       uptip
     end
 
+    def quit?
+      upstream_master = `git rev-parse #{remote}/master` 
+      here = `git rev-parse HEAD`
+      if here != upstream_master
+        puts <<-MSG
+        The commit you are pushing is different from #{remote} master.
+        This means that a subsequent deploy might not include your work.
+        Consider pushing to master now or later.
+        MSG
+        answer = Capistrano::CLI.ui.ask("Do you want to coninue? (y/n)")
+        return !answer.downcase.start_with?('y')
+      end
+      return false
+    end
+
     task :prepare_deploy do
+      sync
+      exit if quit?
       push
       uptip
     end
