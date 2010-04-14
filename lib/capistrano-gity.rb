@@ -67,7 +67,7 @@ Capistrano::Configuration.instance.load do
       uptip
     end
 
-    before 'deploy', 'gity:prepare_deploy'
+    before 'deploy:update_code', 'gity:prepare_deploy'
 
   end
 end
