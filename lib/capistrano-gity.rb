@@ -7,6 +7,19 @@ Capistrano::Configuration.instance.load do
       set :remote,  git_remote.empty? ? 'origin' : git_remote
     end
 
+    unless exists?(:check_master)
+      check_master = case `git config deploy.check-master`.strip
+      when 'false', 'f', '0'
+        false
+      when 'true', 't', '1'
+        true
+      else
+        true
+      end
+
+      set :check_master,  check_master
+    end
+
     desc "Push HEAD to the central repo"
     task :push do
       system "git push --force #{remote} HEAD:#{branch}"
@@ -63,6 +76,8 @@ Capistrano::Configuration.instance.load do
     end
 
     def quit?
+      return false if !check_master
+
       upstream_master = `git rev-parse #{remote}/master` 
       here = `git rev-parse HEAD`
       if here != upstream_master
