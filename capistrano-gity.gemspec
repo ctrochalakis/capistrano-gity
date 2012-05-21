@@ -20,6 +20,7 @@ Gem::Specification.new do |s|
     "README.rdoc",
     "Rakefile",
     "VERSION",
+    "capistrano-gity.gemspec",
     "lib/capistrano-gity.rb"
   ]
   s.homepage = "http://github.com/ctrochalakis/capistrano-gity"
