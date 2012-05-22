@@ -94,7 +94,7 @@ Capistrano::Configuration.instance.load do
 
     task :prepare_deploy do
       sync
-      exit if quit?
+      exit 127 if quit?
       push
       uptip
     end
