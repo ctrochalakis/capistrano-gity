@@ -86,7 +86,7 @@ Capistrano::Configuration.instance.load do
         This means that a subsequent deploy might not include your work.
         Consider pushing to master now or later.
         MSG
-        answer = Capistrano::CLI.ui.ask("Do you want to coninue? (y/n)")
+        answer = Capistrano::CLI.ui.ask("Do you want to continue? (y/n)")
         return !answer.downcase.start_with?('y')
       end
       return false
