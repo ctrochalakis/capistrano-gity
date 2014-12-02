@@ -1,105 +1,161 @@
-Capistrano::Configuration.instance.load do
-  namespace :gity do
+namespace :gity do
+  desc 'Show revision and upstream '
+  task :check do
+    invoke 'gity:uprev'
+    invoke 'gity:uptip'
+  end
 
-    # Most people use origin here
-    unless exists?(:remote)
-      git_remote = `git config deploy.remote`.strip
-      set :remote,  git_remote.empty? ? 'origin' : git_remote
-    end
-
-    unless exists?(:check_master)
-      check_master = case `git config deploy.check-master`.strip
-      when 'false', 'f', '0'
-        false
-      when 'true', 't', '1'
-        true
-      else
-        true
+  desc 'Delete temp branch if auto_cleanup is set to true'
+  task :cleanup_deploy do
+    if fetch(:auto_cleanup)
+      run_locally do
+        system "git push #{fetch(:remote)} --delete --quiet #{fetch(:branch)}"
       end
-
-      set :check_master,  check_master
     end
+  end
 
-    desc "Push HEAD to the central repo"
-    task :push do
-      system "git push --force #{remote} HEAD:#{branch}"
+  desc 'Delete all remote temporary branches, i.e. under deploy/'
+  task :cleanup_temp_branches do
+    run_locally do
+      system "git ls-remote --heads #{fetch(:remote)} '#{fetch(:branch_prefix)}*' | awk '{print $2}' | xargs git push #{fetch(:remote)} --quiet --delete"
     end
+  end
 
-    task :sync do
-      system "git fetch #{remote}"
+  desc 'Create temporary branch on remote'
+  task :create_temp_branch do
+    run_locally do
+      system "git push --force --quiet #{fetch(:remote)} HEAD:#{fetch(:branch)}"
     end
+  end
 
-    desc "View a graph log of the commits usually involved in a deployment"
-    task :status do
-      puts "\nOverview (we are deploying origin/#{branch})"
-      sync
-      system "git --no-pager log --decorate --graph --oneline #{remote}/#{branch} #{remote}/master --not #{remote}/#{branch}^@ --"
-    end
-
-    desc "Display where the central live branch is pointing"
-    task :uptip do
-      sync
-      system %(git --no-pager log --decorate -1 --format="#{remote}'s #{branch} tip is set to: [%h] %s (%an, %ar)"  #{remote}/#{branch})
-    end
-
-    desc "A small overview of the deployment procedure"
-    task :help do
-      puts <<-HELP
+  desc 'A small overview of the deployment procedure'
+  task :help do
+    puts <<-HELP
 
       Overview:
-      * Deploying the #{branch} branch of #{repository}
-      * The #{branch} branch can be moved *anywhere*.
+        * Deploying the #{fetch(:branch)} branch of #{fetch(:repo_url)}
+        * The #{fetch(:branch)} branch can be moved *anywhere*.
 
       Quick help:
-      Go the branch you want to mark as #{branch} (ex. master) and run:
-      cap deploy
+        * Checkout the branch you want to mark as #{fetch(:live_branch)}
+          (ex. master) and run:cap deploy
 
       Under the hood:
-        * git push --force #{remote} HEAD:#{branch} (or cap gity:push)
+        * git push --force #{fetch(:remote)} HEAD:#{fetch(:branch)} (or cap gity:create_temp_branch)
+        * git push --force #{fetch(:remote)} HEAD:#{fetch(:live_branch)} (or cap gity:push_to_live)
         * cap deploy
 
       Troubleshooting:
-      cap gity:uptip # Show the #{branch} branch of the central repo
-      cap gity:status # A log-like view showing important commits
+        cap gity:uptip # Show the #{fetch(:live_branch)} branch of the central repo
+        cap gity:status # A log-like view showing important commits
 
-      cap gity:check # check consistency between the applied revision and the one on the #{branch} branch
-      HELP
+        cap gity:check # check consistency between the applied revision and the one on the #{fetch(:live_branch)} branch
+    HELP
+  end
+
+  desc 'Do necessary steps before deployment'
+  task :prepare_deploy do
+    invoke 'gity:sync'
+    exit 127 if quit?
+    invoke 'gity:create_temp_branch'
+  end
+
+  desc 'Push HEAD to the central repo'
+  task :push do
+    run_locally do
+      system "git push --force --quiet #{fetch(:remote)} HEAD:#{fetch(:live_branch)}"
     end
+  end
 
-    task :uprev do
-      run "cd #{current_path} && cat REVISION"
+  desc 'Push temporary branch to live branch'
+  task :push_to_live do
+    invoke 'gity:push'
+    invoke 'gity:uptip'
+  end
+
+  desc 'View a graph log of the commits usually involved in a deployment'
+  task :status do
+    run_locally do
+      puts "\nOverview (we are deploying origin/#{fetch(:live_branch)})"
+
+      invoke 'gity:sync'
+
+      system "git --no-pager log --decorate --graph --oneline #{fetch(:remote)}/#{fetch(:live_branch)} #{fetch(:remote)}/master --not #{fetch(:remote)}/#{fetch(:live_branch)}^@ --"
     end
+  end
 
-    task :check do
-      uprev
-      uptip
+  desc 'Fetch remote'
+  task :sync do
+    run_locally do
+      system "git fetch #{fetch(:remote)}"
     end
+  end
 
-    def quit?
-      return false if !check_master
+  desc 'Diplay current revision'
+  task :uprev do
+    on release_roles(:app) do
+      within "#{current_path}" do
+        execute "cd #{current_path} && cat REVISION"
+      end
+    end
+  end
 
-      upstream_master = `git rev-parse #{remote}/master` 
-      here = `git rev-parse HEAD`
-      if here != upstream_master
-        puts <<-MSG
-        The commit you are pushing is different from #{remote} master.
+  desc 'Display where the central live branch is pointing'
+  task :uptip do
+    run_locally do
+      system %(git --no-pager log --decorate -1 --format="#{fetch(:remote)}'s #{fetch(:live_branch)} tip is set to: [%h] %s (%an, %ar)"  #{fetch(:remote)}/#{fetch(:live_branch)})
+    end
+  end
+
+  def quit?
+    return false if !fetch(:check_master)
+
+    upstream_master = `git rev-parse #{fetch(:remote)}/master`
+    commit_id = fetch(:commit_id)
+    if commit_id != upstream_master
+      puts <<-MSG
+        The commit(#{commit_id}) you are pushing is different from #{fetch(:remote)} master.
         This means that a subsequent deploy might not include your work.
         Consider pushing to master now or later.
-        MSG
-        answer = Capistrano::CLI.ui.ask("Do you want to continue? (y/n)")
-        return !answer.downcase.start_with?('y')
-      end
-      return false
+      MSG
+      set :answer, ask('Do you want to continue? (y/n)', 'n')
+      return !fetch(:answer).downcase.start_with?('y')
+    end
+    return false
+  end
+
+  before 'deploy:starting', 'gity:prepare_deploy'
+  after 'deploy:finished', 'gity:push_to_live'
+  after 'deploy:finished', 'gity:cleanup_deploy'
+end
+
+namespace :load do
+  task :defaults do
+    set :auto_cleanup, false
+    set :branch_prefix, 'deploy/'
+    set :commit_id, -> { `git rev-parse --short HEAD`.chomp }
+    set :branch, -> {
+      "#{fetch(:branch_prefix)}#{Time.now.strftime('%Y%m%d_%H%M%S')}_#{fetch(:commit_id)}"
+    }
+
+    # Most people use origin here
+    unless any?(:remote)
+      git_remote = `git config deploy.remote`.strip
+
+      set :remote, git_remote.empty? ? 'origin' : git_remote
     end
 
-    task :prepare_deploy do
-      sync
-      exit 127 if quit?
-      push
-      uptip
+    unless any?(:check_master)
+      check_master = case `git config deploy.check-master`.strip
+                     when 'false', 'f', '0'
+                       false
+                     when 'true', 't', '1'
+                       true
+                     else
+                       true
+                     end
+
+      set :check_master, check_master
     end
-
-    before 'deploy:update_code', 'gity:prepare_deploy'
-
   end
 end
