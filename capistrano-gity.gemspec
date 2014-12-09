@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |s|
   s.name             = 'capistrano-gity'
-  s.version          = '1.0.0'
+  s.version          = '1.0.1'
   s.authors          = ['Skroutz.gr Team']
   s.date             = '2012-05-21'
   s.email            = 'yatiohi@ideopolis.gr'
