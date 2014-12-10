@@ -110,7 +110,7 @@ namespace :gity do
   def quit?
     return false if !fetch(:check_master)
 
-    upstream_master = `git rev-parse --short #{fetch(:remote)}/master`
+    upstream_master = `git rev-parse --short #{fetch(:remote)}/master`.chomp
     commit_id = fetch(:commit_id)
     if commit_id != upstream_master
       puts <<-MSG

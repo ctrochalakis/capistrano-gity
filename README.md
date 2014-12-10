@@ -8,7 +8,7 @@ Add this in your Gemfile:
 
 ```ruby
 gem 'capistrano', '~> 3.1'
-gem 'capistrano-gity', '~> 0.6.0'
+gem 'capistrano-gity', '~> 1.0.0'
 ```
 
 # Usage
