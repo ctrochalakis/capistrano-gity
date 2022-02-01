@@ -78,14 +78,16 @@ Capistrano::Configuration.instance.load do
     def quit?
       return false if !check_master
 
-      upstream_master = `git rev-parse #{remote}/master` 
-      here = `git rev-parse HEAD`
-      if here != upstream_master
+      current_branch = `git symbolic-ref --short HEAD`.strip
+      branch_diff_cmd = "git log #{current_branch} ^#{remote}/master --pretty=format:%h%x09%an%x09%ad%x09%s"
+      unpushed_commits = `#{branch_diff_cmd}`
+      if !unpushed_commits.empty?
         puts <<-MSG
-        The commit you are pushing is different from #{remote} master.
+        The following commits are not included in #{remote} master.
         This means that a subsequent deploy might not include your work.
         Consider pushing to master now or later.
         MSG
+        puts unpushed_commits
         answer = Capistrano::CLI.ui.ask("Do you want to continue? (y/n)")
         return !answer.downcase.start_with?('y')
       end
